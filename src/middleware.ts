@@ -37,7 +37,12 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refresh auth token
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch (error) {
+    // Silently catch errors to prevent middleware failure
+    console.error("Auth refresh failed:", error);
+  }
 
   return supabaseResponse;
 }
