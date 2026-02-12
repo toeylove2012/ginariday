@@ -90,13 +90,8 @@ export default function RandomMenu({ userId }: { userId?: string }) {
         return false;
       if (budget === "high" && m.price_min <= 100) return false;
 
-      // Location — skip if available_at is empty (no restrictions)
-      if (
-        m.available_at &&
-        m.available_at.length > 0 &&
-        !m.available_at.includes(location)
-      )
-        return false;
+      // Location
+      if (!m.available_at.includes(location)) return false;
 
       // Spicy
       if (spicy === "spicy" && m.spicy_level < 3) return false;
