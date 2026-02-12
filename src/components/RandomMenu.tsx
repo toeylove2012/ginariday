@@ -4,83 +4,74 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Menu } from "@/types";
 
-type Budget = "low" | "mid" | "high";
-type Location = "condo" | "office" | "uni";
-type Spicy = "any" | "spicy" | "mild";
-type Goal = "any" | "diet" | "protein";
-
 export default function RandomMenu({ userId }: { userId?: string }) {
   const [menus, setMenus] = useState<Menu[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [spinner, setSpinner] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<Menu | null>(null);
+  const [showSpinner, setShowSpinner] = useState(false);
+
+  // Filter state
+  const [budget, setBudget] = useState<"low" | "mid" | "high">("low");
+  const [location, setLocation] = useState<
+    "condo" | "office" | "uni" | "market"
+  >("condo");
+  const [spicy, setSpicy] = useState<"any" | "spicy" | "mild">("any");
+  const [goal, setGoal] = useState<"any" | "diet" | "protein">("any");
+
+  // Debug counters
   const [loadedCount, setLoadedCount] = useState(0);
   const [mappedCount, setMappedCount] = useState(0);
-  const [lastPoolCount, setLastPoolCount] = useState<number | null>(null);
-  const [lastPickedDebug, setLastPickedDebug] = useState<any>(null);
+  const [lastPoolCount, setLastPoolCount] = useState(0);
+  const [lastPickedDebug, setLastPickedDebug] = useState("-");
 
-  const [budget, setBudget] = useState<Budget>("low");
-  const [location, setLocation] = useState<Location>("condo");
-  const [spicy, setSpicy] = useState<Spicy>("any");
-  const [goal, setGoal] = useState<Goal>("any");
-
+  // Fetch menus on mount
   useEffect(() => {
-    const supabase = createClient();
-
-    async function load() {
-      setLoading(true);
-      setError(null);
+    const fetchMenus = async () => {
+      const supabase = createClient();
       try {
-        const res = await supabase.from("menus").select("*");
-        console.debug("supabase res:", res);
-        const data = res.data as any[] | null;
-        const fetchError = res.error;
-        if (fetchError) throw fetchError;
-        // Map DB columns to frontend Menu shape (handles your schema: name_th, protein_g, carb_g, fat_g, available_at TEXT[])
-        const mapped: Menu[] = (data ?? []).map((r) => ({
-          id: r.id as any as any,
-          slug: r.slug,
-          name: r.name_th ?? r.name ?? r.name_en ?? r.slug,
-          type: r.type,
-          spicy_level: r.spicy_level ?? r.spicyLevel ?? 0,
-          price_min: r.price_min ?? 0,
-          price_max: r.price_max ?? 0,
-          calories: r.calories ?? 0,
-          protein: Number(r.protein_g ?? r.protein ?? 0),
-          carb: Number(r.carb_g ?? r.carb ?? 0),
-          fat: Number(r.fat_g ?? r.fat ?? 0),
-          ingredients: r.ingredients ?? r.ingredients_list ?? [],
-          available_at: r.available_at ?? [],
-          reasons: { any: r.description ?? "" },
-        })) as unknown as Menu[];
-        setMenus(mapped);
-        setLoadedCount((data ?? []).length);
+        const { data, error } = await supabase
+          .from("menus")
+          .select("*")
+          .limit(10);
+
+        if (error) throw error;
+        if (!data) return;
+
+        setLoadedCount(data.length);
+
+        // Map DB schema to component Menu type
+        const mapped = data.map(
+          (r: any): Menu => ({
+            id: Number(r.id),
+            slug: r.slug,
+            name: r.name_th ?? r.name_en ?? r.slug,
+            spicy_level: r.spicy_level ?? 0,
+            price_min: r.price_min ?? 50,
+            price_max: r.price_max ?? 100,
+            calories: r.calories ?? 300,
+            protein: Number(r.protein_g ?? 20),
+            carb: Number(r.carb_g ?? 30),
+            fat: Number(r.fat_g ?? 10),
+            available_at: r.available_at ?? [],
+            ingredients: r.ingredients ?? [],
+            type: r.type ?? "อาหารตามสั่ง",
+            reasons: {
+              any: r.description ?? "",
+            },
+          }),
+        );
+
         setMappedCount(mapped.length);
-        console.debug("mapped menus count:", mapped.length);
-        console.debug("loaded menus count:", (data ?? []).length);
-      } catch (err: any) {
-        setError(err?.message || String(err));
+        setMenus(mapped);
+      } catch (err) {
+        console.error("Failed to fetch menus:", err);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    load();
+    fetchMenus();
   }, []);
-
-  function toggleBudget(val: Budget) {
-    setBudget(val);
-  }
-  function toggleLocation(val: Location) {
-    setLocation(val);
-  }
-  function toggleSpicy(val: Spicy) {
-    setSpicy(val);
-  }
-  function toggleGoal(val: Goal) {
-    setGoal(val);
-  }
 
   function scoreMenu(m: Menu): number {
     let score = 50; // base score
@@ -122,82 +113,146 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       score += 10;
     }
 
-    // STEP 5: Controlled randomness (±15 points)
+    // STEP 5: Anti-repeat (ลดคะแนนเมนูที่เพิ่งสุ่มได้)
+    const recent = JSON.parse(
+      localStorage.getItem("recent_menus") || "[]",
+    ) as string[];
+    if (recent.includes(m.id?.toString() ?? m.slug)) {
+      score -= 30;
+    }
+
+    // STEP 6: Controlled randomness (±15 points)
     score += (Math.random() - 0.5) * 30;
 
     return Math.max(0, score);
   }
 
+  function reasonFor(m: Menu, score: number): string {
+    const reasons: string[] = [];
+
+    const budgetLabels: Record<string, string> = {
+      low: "ไม่เกิน 50฿",
+      mid: "50–100฿",
+      high: "มากกว่า 100฿",
+    };
+
+    const baseScore = 50;
+    let earnedBonus = score - baseScore;
+
+    // Reconstruct why this menu was picked
+    if (spicy === "spicy" && m.spicy_level >= 3) {
+      reasons.push("เผ็ดจริง");
+    }
+    if (goal === "diet" && m.calories < 300) {
+      reasons.push("แคลต่ำ");
+    }
+    if (goal === "protein" && m.protein >= 25) {
+      reasons.push("โปรตีนสูง");
+    }
+    if (m.available_at?.includes(location)) {
+      reasons.push(`มีที่ ${location}`);
+    }
+
+    if (reasons.length === 0) {
+      reasons.push("เข้าเงื่อนไข");
+    }
+
+    return reasons.join(" • ");
+  }
+
   function pickRandom() {
-    setSpinner(true);
-    setResult(null);
-    setError(null);
+    if (menus.length === 0) return;
+
+    setShowSpinner(true);
+
     setTimeout(() => {
-      // Score all menus and filter out negative scores
       const scored = menus
         .map((m) => ({ menu: m, score: scoreMenu(m) }))
         .filter((x) => x.score >= 0)
         .sort((a, b) => b.score - a.score);
 
       setLastPoolCount(scored.length);
-      console.debug(
-        "menus total:",
-        menus.length,
-        "scored pool:",
-        scored.length,
-      );
 
       if (scored.length === 0) {
-        setError("ไม่พบเมนูที่ตรงกับเงื่อนไข");
-        setSpinner(false);
+        setShowSpinner(false);
+        setResult(null);
         return;
       }
 
-      // Pick from top 3 by score (weighted randomness)
+      // Pick random from top 3 (weighted randomness)
       const topN = scored.slice(0, Math.min(3, scored.length));
       const chosen = topN[Math.floor(Math.random() * topN.length)];
 
+      // Add to recent_menus (keep last 5)
+      const recent = JSON.parse(
+        localStorage.getItem("recent_menus") || "[]",
+      ) as string[];
+      recent.push(chosen.menu.id?.toString() ?? chosen.menu.slug);
+      if (recent.length > 5) recent.shift();
+      localStorage.setItem("recent_menus", JSON.stringify(recent));
+
+      setLastPickedDebug(chosen.menu.slug);
       setResult(chosen.menu);
-      setLastPickedDebug(chosen.menu);
-      console.debug(
-        "picked from top",
-        topN.length,
-        "menu:",
-        chosen.menu,
-        "score:",
-        chosen.score,
-      );
-      setSpinner(false);
-    }, 500); // small delay to show spinner
+      setShowSpinner(false);
+    }, 800);
   }
 
-  function reasonFor(m: Menu) {
-    if (goal === "diet" && m.reasons?.diet) return m.reasons.diet;
-    if (goal === "protein" && m.reasons?.protein) return m.reasons.protein;
-    return m.reasons?.any ?? "-";
-  }
+  useEffect(() => {
+    // Set up event listeners for chip buttons
+    const handleChipClick = (e: Event) => {
+      const btn = e.target as HTMLElement;
+      const group = btn.getAttribute("data-group");
+      const val = btn.getAttribute("data-val");
+
+      if (!group || !val) return;
+
+      // Update sibling buttons
+      document
+        .querySelectorAll(`[data-group="${group}"]`)
+        .forEach((el) => el.classList.remove("selected"));
+      btn.classList.add("selected");
+
+      // Update state
+      if (group === "budget") setBudget(val as "low" | "mid" | "high");
+      if (group === "location")
+        setLocation(val as "condo" | "office" | "uni" | "market");
+      if (group === "spicy") setSpicy(val as "any" | "spicy" | "mild");
+      if (group === "goal") setGoal(val as "any" | "diet" | "protein");
+    };
+
+    const chipButtons = document.querySelectorAll(".chip");
+    chipButtons.forEach((btn) => {
+      btn.addEventListener("click", handleChipClick as EventListener);
+    });
+
+    // Set up main button
+    const mainBtn = document.querySelector(".btn-main");
+    if (mainBtn) {
+      mainBtn.addEventListener("click", pickRandom);
+    }
+
+    return () => {
+      chipButtons.forEach((btn) => {
+        btn.removeEventListener("click", handleChipClick as EventListener);
+      });
+      if (mainBtn) {
+        mainBtn.removeEventListener("click", pickRandom);
+      }
+    };
+  }, [menus, budget, location, spicy, goal]);
 
   return (
     <section className="section active" id="sec-random">
       <div className="card">
         <p className="card-title">💰 งบประมาณ</p>
         <div className="chip-group" id="budget-group">
-          <button
-            className={`chip ${budget === "low" ? "selected" : ""}`}
-            onClick={() => toggleBudget("low")}
-          >
+          <button className="chip selected" data-group="budget" data-val="low">
             ไม่เกิน 50฿
           </button>
-          <button
-            className={`chip ${budget === "mid" ? "selected" : ""}`}
-            onClick={() => toggleBudget("mid")}
-          >
+          <button className="chip" data-group="budget" data-val="mid">
             50–100฿
           </button>
-          <button
-            className={`chip ${budget === "high" ? "selected" : ""}`}
-            onClick={() => toggleBudget("high")}
-          >
+          <button className="chip" data-group="budget" data-val="high">
             มากกว่า 100฿
           </button>
         </div>
@@ -205,139 +260,91 @@ export default function RandomMenu({ userId }: { userId?: string }) {
         <p className="card-title">📍 อยู่ที่ไหน</p>
         <div className="chip-group" id="location-group">
           <button
-            className={`chip ${location === "condo" ? "selected" : ""}`}
-            onClick={() => toggleLocation("condo")}
+            className="chip selected"
+            data-group="location"
+            data-val="condo"
           >
             คอนโด/บ้าน
           </button>
-          <button
-            className={`chip ${location === "office" ? "selected" : ""}`}
-            onClick={() => toggleLocation("office")}
-          >
+          <button className="chip" data-group="location" data-val="office">
             ออฟฟิศ
           </button>
-          <button
-            className={`chip ${location === "uni" ? "selected" : ""}`}
-            onClick={() => toggleLocation("uni")}
-          >
+          <button className="chip" data-group="location" data-val="uni">
             มหาวิทยาลัย
           </button>
         </div>
 
         <p className="card-title">🌶️ ความเผ็ด</p>
         <div className="chip-group" id="spicy-group">
-          <button
-            className={`chip ${spicy === "any" ? "selected" : ""}`}
-            onClick={() => toggleSpicy("any")}
-          >
+          <button className="chip selected" data-group="spicy" data-val="any">
             ไม่สน
           </button>
-          <button
-            className={`chip spicy ${spicy === "spicy" ? "selected" : ""}`}
-            onClick={() => toggleSpicy("spicy")}
-          >
+          <button className="chip spicy" data-group="spicy" data-val="spicy">
             เผ็ดเลย
           </button>
-          <button
-            className={`chip ${spicy === "mild" ? "selected" : ""}`}
-            onClick={() => toggleSpicy("mild")}
-          >
+          <button className="chip" data-group="spicy" data-val="mild">
             ไม่เผ็ด
           </button>
         </div>
 
         <p className="card-title">⚖️ เป้าหมาย</p>
         <div className="chip-group" id="goal-group">
-          <button
-            className={`chip ${goal === "any" ? "selected" : ""}`}
-            onClick={() => toggleGoal("any")}
-          >
+          <button className="chip selected" data-group="goal" data-val="any">
             กินอิ่มพอ
           </button>
-          <button
-            className={`chip healthy ${goal === "diet" ? "selected" : ""}`}
-            onClick={() => toggleGoal("diet")}
-          >
+          <button className="chip healthy" data-group="goal" data-val="diet">
             ควบคุมแคล
           </button>
-          <button
-            className={`chip ${goal === "protein" ? "selected" : ""}`}
-            onClick={() => toggleGoal("protein")}
-          >
+          <button className="chip" data-group="goal" data-val="protein">
             เน้นโปรตีน
           </button>
         </div>
       </div>
 
-      <button
-        className="btn-main"
-        onClick={pickRandom}
-        disabled={loading || spinner}
-      >
-        🎲 สุ่มเมนูเลย!
-      </button>
+      <button className="btn-main">🎲 สุ่มเมนูเลย!</button>
 
-      {spinner && (
-        <div className="spinner" id="spinner-random">
-          ⏳ กำลังคิด...
+      {showSpinner && <div className="spinner">⏳ กำลังคิด...</div>}
+
+      {result && (
+        <div className="result-card">
+          <div className="result-menu-name">{result.name}</div>
+          <div className="result-reason">{reasonFor(result, 0)}</div>
+          <div className="result-stats">
+            <div className="stat-box">
+              <span className="stat-value">{result.calories}</span>
+              <span className="stat-label">แคลอรี่</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">
+                {result.price_min}–{result.price_max}
+              </span>
+              <span className="stat-label">ราคา (฿)</span>
+            </div>
+            <div className="stat-box">
+              <span className="stat-value">{result.protein}</span>
+              <span className="stat-label">โปรตีน (g)</span>
+            </div>
+          </div>
+          <div className="result-tags">
+            <span className="tag-chip">ความเผ็ด: {result.spicy_level}/5</span>
+          </div>
+          <button className="btn-secondary" style={{ marginTop: "16px" }}>
+            🔄 สุ่มอีกที
+          </button>
         </div>
       )}
 
-      <div className="result-card" id="result-random">
-        <div className="result-menu-name" id="res-name">
-          {result?.name ?? "—"}
-        </div>
-        <div className="result-reason" id="res-reason">
-          {result ? reasonFor(result) : "—"}
-        </div>
-        <div className="result-stats">
-          <div className="stat-box">
-            <span className="stat-value" id="res-cal">
-              {result ? result.calories : "—"}
-            </span>
-            <span className="stat-label">แคลอรี่</span>
-          </div>
-          <div className="stat-box">
-            <span className="stat-value" id="res-price">
-              {result ? `${result.price_min}-${result.price_max}` : "—"}
-            </span>
-            <span className="stat-label">ราคา (฿)</span>
-          </div>
-          <div className="stat-box">
-            <span className="stat-value" id="res-protein">
-              {result ? result.protein : "—"}
-            </span>
-            <span className="stat-label">โปรตีน (g)</span>
-          </div>
-        </div>
-        <div className="result-tags" id="res-tags">
-          {result &&
-            result.available_at.map((t) => (
-              <span key={t} className="tag mr-2">
-                {t}
-              </span>
-            ))}
-        </div>
-        <button
-          className="btn-secondary"
-          onClick={pickRandom}
-          style={{ marginTop: 16 }}
-        >
-          🔄 สุ่มอีกที
-        </button>
-      </div>
-      {/* Debug info - visible on page to help diagnose fetching/filtering issues */}
-      <div style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
-        <div>
-          DEBUG — loaded rows: {loadedCount} • mapped: {mappedCount}
-        </div>
-        <div>
-          last filtered pool: {lastPoolCount ?? "-"} • last picked:{" "}
-          {lastPickedDebug
-            ? (lastPickedDebug.slug ?? lastPickedDebug.name ?? "obj")
-            : "-"}
-        </div>
-        {error && <div style={{ color: "crimson" }}>Error: {error}</div>}
+      {/* Debug info */}
+      <div
+        style={{
+          fontSize: "0.75rem",
+          color: "#999",
+          marginTop: "16px",
+          fontFamily: "monospace",
+        }}
+      >
+        📊 loaded: {loadedCount} • mapped: {mappedCount} • pool: {lastPoolCount}{" "}
+        • picked: {lastPickedDebug}
       </div>
     </section>
   );
