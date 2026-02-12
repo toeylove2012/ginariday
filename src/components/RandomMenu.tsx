@@ -29,14 +29,24 @@ export default function RandomMenu({ userId }: { userId?: string }) {
     const fetchMenus = async () => {
       const supabase = createClient();
       try {
+        console.log("📡 Fetching menus from Supabase...");
         const { data, error } = await supabase
           .from("menus")
           .select("*")
           .limit(10);
 
-        if (error) throw error;
-        if (!data) return;
+        if (error) {
+          console.error("❌ Supabase error:", error);
+          throw error;
+        }
 
+        console.log("✅ Data received:", data);
+        if (!data) {
+          console.warn("⚠️ No data returned");
+          return;
+        }
+
+        console.log(`📊 Loaded ${data.length} menus`);
         setLoadedCount(data.length);
 
         // Map DB schema to component Menu type
@@ -61,10 +71,11 @@ export default function RandomMenu({ userId }: { userId?: string }) {
           }),
         );
 
+        console.log(`✅ Mapped ${mapped.length} menus`);
         setMappedCount(mapped.length);
         setMenus(mapped);
       } catch (err) {
-        console.error("Failed to fetch menus:", err);
+        console.error("❌ Failed to fetch menus:", err);
       } finally {
         setLoading(false);
       }
