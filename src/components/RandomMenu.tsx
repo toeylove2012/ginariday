@@ -20,6 +20,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
   const [mappedCount, setMappedCount] = useState(0);
   const [lastPoolCount, setLastPoolCount] = useState(0);
   const [lastPickedDebug, setLastPickedDebug] = useState("-");
+  const [lastChosenScore, setLastChosenScore] = useState<number | null>(null);
 
   // Fetch menus on mount
   useEffect(() => {
@@ -208,6 +209,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       localStorage.setItem("recent_menus", JSON.stringify(recent));
 
       setLastPickedDebug(chosen.menu.slug);
+      setLastChosenScore(chosen.score);
       setResult(chosen.menu);
       setShowSpinner(false);
     }, 800);
@@ -305,7 +307,9 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       {result && (
         <div className="result-card">
           <div className="result-menu-name">{result.name}</div>
-          <div className="result-reason">{reasonFor(result, 0)}</div>
+          <div className="result-reason">
+            {reasonFor(result, lastChosenScore ?? 0)}
+          </div>
           <div className="result-stats">
             <div className="stat-box">
               <span className="stat-value">{result.calories}</span>
