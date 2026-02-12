@@ -211,9 +211,22 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       setLastPickedDebug(chosen.menu.slug);
       setLastChosenScore(chosen.score);
       setResult(chosen.menu);
+      // debug log chosen menu
+      try {
+        // eslint-disable-next-line no-console
+        console.log("🎯 Chosen menu:", chosen);
+      } catch (e) {}
       setShowSpinner(false);
     }, 800);
   }
+
+  // Watch result updates for debugging UI-render issues
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log("🔁 result state changed:", result);
+    } catch (e) {}
+  }, [result]);
 
   useEffect(() => {
     // Set up event listeners for chip buttons
