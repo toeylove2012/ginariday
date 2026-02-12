@@ -82,50 +82,91 @@ export default function RandomMenu({ userId }: { userId?: string }) {
     setGoal(val);
   }
 
-  function filterMenus(): Menu[] {
-    return menus.filter((m) => {
-      // Budget filter based on price_max primarily
-      if (budget === "low" && m.price_max > 50) return false;
-      if (budget === "mid" && (m.price_max <= 50 || m.price_max > 100))
-        return false;
-      if (budget === "high" && m.price_min <= 100) return false;
+  function scoreMenu(m: Menu): number {
+    let score = 50; // base score
 
-      // Location
-      if (!m.available_at.includes(location)) return false;
+    // STEP 1: Hard filters (budget as hard limit)
+    const budgetPass: Record<string, boolean> = {
+      low: m.price_min <= 50,
+      mid: m.price_min <= 100,
+      high: true,
+    };
+    if (!budgetPass[budget]) return -1; // ตัดออก
 
-      // Spicy
-      if (spicy === "spicy" && m.spicy_level < 3) return false;
-      if (spicy === "mild" && m.spicy_level > 1) return false;
+    // STEP 2: Spicy preference bonus/penalty
+    if (spicy === "spicy") {
+      if (m.spicy_level >= 3) score += 20;
+      if (m.spicy_level < 2) score -= 15;
+    }
+    if (spicy === "mild") {
+      if (m.spicy_level <= 1) score += 20;
+      if (m.spicy_level > 2) score -= 15;
+    }
 
-      // Goal
-      if (goal === "diet" && m.calories > 450) return false;
-      if (goal === "protein" && m.protein < 20) return false;
+    // STEP 3: Goal scoring
+    if (goal === "diet") {
+      if (m.calories < 300) score += 25;
+      else if (m.calories < 450) score += 10;
+      else if (m.calories > 600) score -= 15;
+    }
+    if (goal === "protein") {
+      if (m.protein >= 25) score += 25;
+      else if (m.protein >= 18) score += 12;
+    }
 
-      return true;
-    });
+    // STEP 4: Location availability (soft bonus if available)
+    if (m.available_at && m.available_at.length > 0) {
+      if (m.available_at.includes(location)) score += 15;
+    } else {
+      // No restrictions = available anywhere
+      score += 10;
+    }
+
+    // STEP 5: Controlled randomness (±15 points)
+    score += (Math.random() - 0.5) * 30;
+
+    return Math.max(0, score);
   }
 
   function pickRandom() {
     setSpinner(true);
     setResult(null);
+    setError(null);
     setTimeout(() => {
-      const pool = filterMenus();
-      setLastPoolCount(pool.length);
+      // Score all menus and filter out negative scores
+      const scored = menus
+        .map((m) => ({ menu: m, score: scoreMenu(m) }))
+        .filter((x) => x.score >= 0)
+        .sort((a, b) => b.score - a.score);
+
+      setLastPoolCount(scored.length);
       console.debug(
         "menus total:",
         menus.length,
-        "filtered pool:",
-        pool.length,
+        "scored pool:",
+        scored.length,
       );
-      if (pool.length === 0) {
+
+      if (scored.length === 0) {
         setError("ไม่พบเมนูที่ตรงกับเงื่อนไข");
         setSpinner(false);
         return;
       }
-      const idx = Math.floor(Math.random() * pool.length);
-      setResult(pool[idx]);
-      setLastPickedDebug(pool[idx]);
-      console.debug("picked idx:", idx, "menu:", pool[idx]);
+
+      // Pick from top 3 by score (weighted randomness)
+      const topN = scored.slice(0, Math.min(3, scored.length));
+      const chosen = topN[Math.floor(Math.random() * topN.length)];
+
+      setResult(chosen.menu);
+      setLastPickedDebug(chosen.menu);
+      console.debug(
+        "picked from top",
+        topN.length,
+        "menu:",
+        chosen.menu,
+        "score:",
+        chosen.score,
+      );
       setSpinner(false);
     }, 500); // small delay to show spinner
   }
