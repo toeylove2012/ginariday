@@ -318,7 +318,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       {showSpinner && <div className="spinner">⏳ กำลังคิด...</div>}
 
       {result && (
-        <div className="result-card">
+        <div className="result-card show">
           <div className="result-menu-name">{result.name}</div>
           <div className="result-reason">
             {reasonFor(result, lastChosenScore ?? 0)}
@@ -346,25 +346,6 @@ export default function RandomMenu({ userId }: { userId?: string }) {
             🔄 สุ่มอีกที
           </button>
         </div>
-      )}
-
-      {/* Visible debug: dump whole result object to confirm state */}
-      {result && (
-        <pre
-          style={{
-            marginTop: 12,
-            background: "#111",
-            color: "#dcdcdc",
-            padding: 12,
-            borderRadius: 6,
-            fontSize: 12,
-            whiteSpace: "pre-wrap",
-            maxHeight: 200,
-            overflow: "auto",
-          }}
-        >
-          {JSON.stringify(result, null, 2)}
-        </pre>
       )}
 
       {/* Debug info */}
