@@ -30,10 +30,28 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       try {
         const res = await supabase.from("menus").select("*");
         console.debug("supabase res:", res);
-        const data = res.data as Menu[] | null;
+        const data = res.data as any[] | null;
         const fetchError = res.error;
         if (fetchError) throw fetchError;
-        setMenus(data ?? []);
+        // Map DB columns to frontend Menu shape (handles your schema: name_th, protein_g, carb_g, fat_g, available_at TEXT[])
+        const mapped: Menu[] = (data ?? []).map((r) => ({
+          id: r.id as any as any,
+          slug: r.slug,
+          name: r.name_th ?? r.name ?? r.name_en ?? r.slug,
+          type: r.type,
+          spicy_level: r.spicy_level ?? r.spicyLevel ?? 0,
+          price_min: r.price_min ?? 0,
+          price_max: r.price_max ?? 0,
+          calories: r.calories ?? 0,
+          protein: Number(r.protein_g ?? r.protein ?? 0),
+          carb: Number(r.carb_g ?? r.carb ?? 0),
+          fat: Number(r.fat_g ?? r.fat ?? 0),
+          ingredients: r.ingredients ?? r.ingredients_list ?? [],
+          available_at: r.available_at ?? [],
+          reasons: { any: r.description ?? "" },
+        })) as unknown as Menu[];
+        setMenus(mapped);
+        console.debug("mapped menus count:", mapped.length);
         console.debug("loaded menus count:", (data ?? []).length);
       } catch (err: any) {
         setError(err?.message || String(err));
