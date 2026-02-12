@@ -15,6 +15,10 @@ export default function RandomMenu({ userId }: { userId?: string }) {
   const [spinner, setSpinner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Menu | null>(null);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [mappedCount, setMappedCount] = useState(0);
+  const [lastPoolCount, setLastPoolCount] = useState<number | null>(null);
+  const [lastPickedDebug, setLastPickedDebug] = useState<any>(null);
 
   const [budget, setBudget] = useState<Budget>("low");
   const [location, setLocation] = useState<Location>("condo");
@@ -51,6 +55,8 @@ export default function RandomMenu({ userId }: { userId?: string }) {
           reasons: { any: r.description ?? "" },
         })) as unknown as Menu[];
         setMenus(mapped);
+        setLoadedCount((data ?? []).length);
+        setMappedCount(mapped.length);
         console.debug("mapped menus count:", mapped.length);
         console.debug("loaded menus count:", (data ?? []).length);
       } catch (err: any) {
@@ -104,6 +110,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
     setResult(null);
     setTimeout(() => {
       const pool = filterMenus();
+      setLastPoolCount(pool.length);
       console.debug(
         "menus total:",
         menus.length,
@@ -117,6 +124,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       }
       const idx = Math.floor(Math.random() * pool.length);
       setResult(pool[idx]);
+      setLastPickedDebug(pool[idx]);
       console.debug("picked idx:", idx, "menu:", pool[idx]);
       setSpinner(false);
     }, 500); // small delay to show spinner
@@ -276,6 +284,19 @@ export default function RandomMenu({ userId }: { userId?: string }) {
         >
           🔄 สุ่มอีกที
         </button>
+      </div>
+      {/* Debug info - visible on page to help diagnose fetching/filtering issues */}
+      <div style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
+        <div>
+          DEBUG — loaded rows: {loadedCount} • mapped: {mappedCount}
+        </div>
+        <div>
+          last filtered pool: {lastPoolCount ?? "-"} • last picked:{" "}
+          {lastPickedDebug
+            ? (lastPickedDebug.slug ?? lastPickedDebug.name ?? "obj")
+            : "-"}
+        </div>
+        {error && <div style={{ color: "crimson" }}>Error: {error}</div>}
       </div>
     </section>
   );
