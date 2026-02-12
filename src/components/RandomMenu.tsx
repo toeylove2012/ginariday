@@ -12,9 +12,6 @@ export default function RandomMenu({ userId }: { userId?: string }) {
 
   // Filter state
   const [budget, setBudget] = useState<"low" | "mid" | "high">("low");
-  const [location, setLocation] = useState<
-    "condo" | "office" | "uni" | "market"
-  >("condo");
   const [spicy, setSpicy] = useState<"any" | "spicy" | "mild">("any");
   const [goal, setGoal] = useState<"any" | "diet" | "protein">("any");
 
@@ -116,15 +113,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       else if (m.protein >= 18) score += 12;
     }
 
-    // STEP 4: Location availability (soft bonus if available)
-    if (m.available_at && m.available_at.length > 0) {
-      if (m.available_at.includes(location)) score += 15;
-    } else {
-      // No restrictions = available anywhere
-      score += 10;
-    }
-
-    // STEP 5: Anti-repeat (ลดคะแนนเมนูที่เพิ่งสุ่มได้)
+    // STEP 4: Anti-repeat (ลดคะแนนเมนูที่เพิ่งสุ่มได้)
     const recent = JSON.parse(
       localStorage.getItem("recent_menus") || "[]",
     ) as string[];
@@ -159,9 +148,6 @@ export default function RandomMenu({ userId }: { userId?: string }) {
     }
     if (goal === "protein" && m.protein >= 25) {
       reasons.push("โปรตีนสูง");
-    }
-    if (m.available_at?.includes(location)) {
-      reasons.push(`มีที่ ${location}`);
     }
 
     if (reasons.length === 0) {
@@ -225,8 +211,6 @@ export default function RandomMenu({ userId }: { userId?: string }) {
 
       // Update state
       if (group === "budget") setBudget(val as "low" | "mid" | "high");
-      if (group === "location")
-        setLocation(val as "condo" | "office" | "uni" | "market");
       if (group === "spicy") setSpicy(val as "any" | "spicy" | "mild");
       if (group === "goal") setGoal(val as "any" | "diet" | "protein");
     };
@@ -250,7 +234,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
         mainBtn.removeEventListener("click", pickRandom);
       }
     };
-  }, [menus, budget, location, spicy, goal]);
+  }, [menus, budget, spicy, goal]);
 
   return (
     <section className="section active" id="sec-random">
@@ -265,23 +249,6 @@ export default function RandomMenu({ userId }: { userId?: string }) {
           </button>
           <button className="chip" data-group="budget" data-val="high">
             มากกว่า 100฿
-          </button>
-        </div>
-
-        <p className="card-title">📍 อยู่ที่ไหน</p>
-        <div className="chip-group" id="location-group">
-          <button
-            className="chip selected"
-            data-group="location"
-            data-val="condo"
-          >
-            คอนโด/บ้าน
-          </button>
-          <button className="chip" data-group="location" data-val="office">
-            ออฟฟิศ
-          </button>
-          <button className="chip" data-group="location" data-val="uni">
-            มหาวิทยาลัย
           </button>
         </div>
 
