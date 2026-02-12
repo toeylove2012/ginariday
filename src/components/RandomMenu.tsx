@@ -27,6 +27,14 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       const supabase = createClient();
       try {
         console.log("📡 Fetching menus from Supabase...");
+
+        // First check: count all rows
+        const { count, error: countError } = await supabase
+          .from("menus")
+          .select("*", { count: "exact", head: true });
+
+        console.log(`📊 Total menus in DB: ${count} | Error:`, countError);
+
         const { data, error } = await supabase
           .from("menus")
           .select("*")
