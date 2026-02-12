@@ -27,6 +27,17 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       const supabase = createClient();
       try {
         console.log("📡 Fetching menus from Supabase...");
+        // Diagnostic: print the Supabase URL this client is using
+        try {
+          // NEXT_PUBLIC_SUPABASE_URL is safe to log (public)
+          // eslint-disable-next-line no-console
+          console.log(
+            "🔎 Supabase URL (client):",
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+          );
+        } catch (e) {
+          // ignore
+        }
 
         // First check: count all rows
         const { count, error: countError } = await supabase
