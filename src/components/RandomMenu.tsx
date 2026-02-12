@@ -29,10 +29,12 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       setError(null);
       try {
         const res = await supabase.from("menus").select("*");
+        console.debug("supabase res:", res);
         const data = res.data as Menu[] | null;
         const fetchError = res.error;
         if (fetchError) throw fetchError;
         setMenus(data ?? []);
+        console.debug("loaded menus count:", (data ?? []).length);
       } catch (err: any) {
         setError(err?.message || String(err));
       } finally {
@@ -84,6 +86,12 @@ export default function RandomMenu({ userId }: { userId?: string }) {
     setResult(null);
     setTimeout(() => {
       const pool = filterMenus();
+      console.debug(
+        "menus total:",
+        menus.length,
+        "filtered pool:",
+        pool.length,
+      );
       if (pool.length === 0) {
         setError("ไม่พบเมนูที่ตรงกับเงื่อนไข");
         setSpinner(false);
@@ -91,6 +99,7 @@ export default function RandomMenu({ userId }: { userId?: string }) {
       }
       const idx = Math.floor(Math.random() * pool.length);
       setResult(pool[idx]);
+      console.debug("picked idx:", idx, "menu:", pool[idx]);
       setSpinner(false);
     }, 500); // small delay to show spinner
   }
