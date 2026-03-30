@@ -23,7 +23,7 @@ export const INGREDIENTS: Ingredient[] = [
 ]
 
 export const INGREDIENT_MAP: Record<string, string[]> = {
-  egg: ['ข้าว', 'ไข่'],
+  egg: ['ไข่'],
   pork: ['หมู'],
   chicken: ['ไก่'],
   rice: ['ข้าว'],
